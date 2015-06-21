@@ -1,0 +1,95 @@
+Data Products Project
+========================================================
+author: Justin Lutz
+date: `r date()`
+
+Introduction
+========================================================
+
+<small>This presentation covers material that was covered during the Machine Learning course in the Coursera Data Science specialization.
+
+The data derives from the "Wearable Computing: Accelerometers Data Classification of Body Postures and Movements" research (you can get to the link at http://groupware.les.inf.puc-rio.br/har#sbia_paper_section#ixzz3YRDLWxEV).
+
+From the research paper: "Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E)."
+                                                                                                                                                                                                                                                         The goal of this presentation is to show the results of the machine learning model that was developed in the Machine Learning class.</small>
+
+Data Analysis
+========================================================
+
+```{r, echo=FALSE}
+setInternet2(use = TRUE)
+train.url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+test.url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(train.url, "./pml-training.csv")
+download.file(test.url, "./pml-testing.csv")
+training.data <- read.csv("./pml-training.csv")
+testing.data <- read.csv("./pml-testing.csv")
+#clean the training data (19216 is the number of NAs in many columns, so just remove them)
+training.data[training.data==""] <- NA
+training.data <- training.data[,colSums(is.na(training.data))<19216]
+drop.cols <- c("X","user_name","cvtd_timestamp", "raw_timestamp_part_1","raw_timestamp_part_2", "new_window", "num_window")
+training.data <- training.data[,!(names(training.data) %in% drop.cols)]
+training.data$classe <- factor(training.data$classe)
+#clean testing data
+testing.data[testing.data==""] <- NA
+#get rid of NA columns
+testing.data <- testing.data[,colSums(is.na(testing.data))<20]
+testing.data <- testing.data[,!(names(testing.data) %in% drop.cols)]
+```
+<small>Taking a look at the initial data, you can see a relationship between total acceleration from a sensor and the resulting classification.  For example, for the "E" classification (throwing the hips to the front), there is greater hip acceleration than any other classification.  Other acceleration data from other sensors (forearm, arm, dumbbell) show similar results.  See the boxplots to the right.</small>
+***
+```{r,echo=FALSE}
+library(ggplot2)
+library(grid)
+library(gridExtra)
+p1 <- qplot(classe, total_accel_belt, data=training.data, fill=classe, geom=c("boxplot", "jitter"))
+p2 <- qplot(classe, total_accel_forearm, data=training.data, fill=classe, geom=c("boxplot", "jitter"))
+p3 <- qplot(classe, total_accel_arm, data=training.data, fill=classe, geom=c("boxplot", "jitter"))
+p4 <- qplot(classe, total_accel_dumbbell, data=training.data, fill=classe, geom=c("boxplot", "jitter"))
+grid.arrange(p1,p2,p3,p4,nrow=2,ncol=2)
+```
+
+
+Prediction Model Used
+========================================================
+```{r, echo=FALSE}
+##create data partition with training and testing data
+library(caret)
+library(randomForest)
+train.part <- createDataPartition(y=training.data$classe, p=0.75, list=FALSE)
+training <- training.data[train.part,]
+testing <- training.data[-train.part,]
+#train data
+set.seed(1000)
+```
+<small>The input data was divided into a training set and a testing set.  The training set was then run through the Random Forest training model with 3-fold cross validation.  The resulting model had an in-sample accuracy of over 99%.</small>
+```{r, echo=FALSE}
+#set up training control function with cross validation
+fitControl <- trainControl(method = "cv", number = 3)
+modelFit <- train(classe ~., data=training, trControl=fitControl, 
+                  method="rf", tuneGrid = data.frame(mtry = 6), ntree=100)
+```
+```{r, echo=FALSE}
+modelFit
+```
+
+Results
+========================================================
+
+<small>The resulting model was then used to test the sub-testing set derived from the training data.  The "out-of-sample" accuracy, which is 1 - accuracy, was approximately 0.06%, which I felt was adequate enough to apply to the final test data.</small>
+
+```{r, echo=FALSE}
+test.predict <- predict(modelFit, testing)
+confusionMatrix(test.predict, testing$classe)
+```
+```{r, echo=TRUE}
+#test on final testing set
+final.predict <- predict(modelFit,testing.data)
+final.predict
+```
+<small>The final step was to apply the model to the final test data.
+These final predictions were then assembled into text files and submitted to the Coursera website.  All 20 test cases were classified correctly.
+References
+Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6.
+
+Read more: http://groupware.les.inf.puc-rio.br/har#sbia_paper_section#ixzz3YRDLWxEV</small>
